@@ -283,13 +283,14 @@ def simulate_genomes_with_known_pedigree(
         )
 
     # simulation beyond fixed pedigree
-    ts = msprime.sim_ancestry(
+    ts_recap = msprime.sim_ancestry(
         initial_state = ts,
         recombination_rate = rate_map,
         demography = demography,
         random_seed = seed + 200,
         model = model # Could also do WF
         )
+    
     # drop mutations down the tree
     ts = msprime.sim_mutations(
               ts,
@@ -297,15 +298,31 @@ def simulate_genomes_with_known_pedigree(
               random_seed = seed + 300
               )
 
-    if(censor): ts = censor_pedigree(ts)
+    # drop mutations down the tree
+    ts_recap = msprime.sim_mutations(
+              ts_recap,
+              rate = mutation_rate,
+              random_seed = seed + 300
+              )
+
+    if censor: 
+        ts = censor_pedigree(ts)
+        ts_recap = censor_pedigree(ts_recap)
 
     # remove centromere
     ts = ts.delete_intervals(intervals = centromere_intervals)
+    ts_recap = ts_recap.delete_intervals(intervals = centromere_intervals)
+
     # modify sequence length to include `right` telomere
     tables = ts.dump_tables()
     tables.sequence_length = sequence_length_from_assembly
     ts = tables.tree_sequence()
-    return ts
+
+    tables_recap = ts_recap.dump_tables()
+    tables_recap.sequence_length = sequence_length_from_assembly
+    ts_recap = tables_recap.tree_sequence()
+
+    return ts, ts_recap
 
 def simulation_sanity_checks(ts, ped):
     """

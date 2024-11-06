@@ -5,11 +5,20 @@ import pandas as pd
 import numpy as np
 import msprime
 import demes
+import tskit
+from scipy.linalg import eigh
+
+sys.path.insert(0, "code")
 import pedigree_tools
+import grm_tools
 
 def main(args):
+    ###################
+    #### Load data ####
+    ###################
+
     # input pedigree file name
-    pedigree_file_name = '{}/code/{}.txt'.format(args.dir, args.pedigree_name)
+    pedigree_file_name = args.pedigree_name
     # load input pedigree
     txt_ped = pedigree_tools.load_and_verify_pedigree(pedigree_file_name)
 
@@ -19,14 +28,14 @@ def main(args):
     graph = demes.load(yaml_file)
     ooa_2T12 = msprime.Demography.from_demes(graph)
     # define recombination map file name from stdpopsim
-    map_file_name = '{}/maps/genetic_map_GRCh37_chr{}.txt'.format(args.dir, args.chromosome)
+    map_file_name = '{}/code/maps/genetic_map_GRCh37_chr{}.txt'.format(args.dir, args.chromosome)
     map = msprime.intervals.RateMap.read_hapmap(map_file_name)
     # identify centromere
-    centromeres=pd.read_csv('{}/maps/centromeres.csv'.format(args.dir))
+    centromeres=pd.read_csv('{}/code/maps/centromeres.csv'.format(args.dir))
     centromere_intervals=centromeres.loc[centromeres['chrom'] == str(args.chromosome),["start","end"]].values
     # get chromosome length
     # from https://www.ncbi.nlm.nih.gov/grc/human/data?asm=GRCh37
-    chromosome_length=pd.read_csv('{}/maps/GRCh37_chromosome_length.csv'.format(args.dir))
+    chromosome_length=pd.read_csv('{}/code/maps/GRCh37_chromosome_length.csv'.format(args.dir))
     assembly_len=chromosome_length.loc[chromosome_length['chrom'] == str(args.chromosome),["length_bp"]].values
     # sequence_length from map file
     len =  map.right.max()
@@ -34,8 +43,10 @@ def main(args):
     print('pedigree: {}, chromosome: {}, length: {}, mutation_rate: {}, censor: {}'.format(
           args.pedigree_name, args.chromosome, len, args.mut_rate, args.censor))
 
-    # run genome simulations
-    ts = pedigree_tools.simulate_genomes_with_known_pedigree(
+    ################################
+    #### Run genome simulations ####
+    ################################
+    ts, ts_recap = pedigree_tools.simulate_genomes_with_known_pedigree(
          text_pedigree = txt_ped,
          demography = ooa_2T12,
          model = 'hudson',
@@ -45,18 +56,24 @@ def main(args):
          sequence_length_from_assembly = assembly_len,
          centromere_intervals = centromere_intervals,
          censor = args.censor,
-         seed = args.chromosome + args.seed_offset
+         seed = args.repetition + args.seed_offset
          )
 
     # run some basic sanity checks
     pedigree_tools.simulation_sanity_checks(ts, txt_ped)
+    pedigree_tools.simulation_sanity_checks(ts_recap, txt_ped)
 
-    # write output tree sequence
-    out = '{}/{}_{}_{}.ts'.format(
-           args.out, args.pedigree_name, args.chromosome, args.suffix)
-    ts.dump(out)
+    # Save output tree sequence
+    ts_dir_out = 'tree_sequences/balsac/chr{}/sim{}'.format(
+        args.chromosome, args.repetition)
+    if not os.path.exists(ts_dir_out):
+        os.makedirs(ts_dir_out)
 
-    print('output: ', out)
+    ts.dump(ts_dir_out + "/trees.ts")
+    ts_recap.dump(ts_dir_out + "/trees_recap.ts")
+
+    print("Finished.")
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -92,6 +109,11 @@ if __name__ == "__main__":
         default=0,
         type=int,
         help="specify random seed"
+        )
+    parser.add_argument("-rep", "--repetition",
+        default=1,
+        type=int,
+        help="specify repetition"
         )
     args = parser.parse_args()
 
