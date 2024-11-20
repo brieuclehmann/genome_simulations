@@ -118,6 +118,11 @@ list_of_probands <- pedigree %>%
   pull(ind) 
 
 relatives <- identify_related_probands(pedigree, list_of_probands, k=5) 
+relatives <- relatives %>%
+    select(-ancestor) %>%
+    group_by(proband1, proband2) %>%
+    filter(generation == min(generation)) %>%
+    distinct()
 
 relatives %>% arrange(generation)
 
