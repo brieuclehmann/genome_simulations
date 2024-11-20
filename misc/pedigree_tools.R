@@ -458,3 +458,99 @@ plot_projection <-
             axis.title = element_text(size = 10))
     return(out)
   }
+
+
+library(dplyr)
+library(tidyr)
+library(furrr)
+# Recursive function to get ancestors up to k generations
+get_ancestors <- function(pedigree, inds, k, current_generation = 0) {
+  if (k < 0 || length(inds) == 0) {
+    # If we reach k < 0 or inds is empty, return an empty data frame
+    return(data.frame(ancestor = integer(0), generation = integer(0)))
+  } else {
+    # Current ancestors at this generation
+    current_ancestors <- data.frame(ancestor = inds, generation = current_generation)
+    
+    # Retrieve parents of the current individuals
+    parents <- pedigree %>%
+      filter(ind %in% inds) %>%
+      select(father, mother)
+    
+    # Recursively get ancestors from parents, incrementing generation each time
+    ancestors_father <- get_ancestors(pedigree, na.omit(parents$father), k - 1, current_generation + 1)
+    ancestors_mother <- get_ancestors(pedigree, na.omit(parents$mother), k - 1, current_generation + 1)
+    
+    # Combine all ancestors, ensuring no duplicate rows
+    all_ancestors <- bind_rows(current_ancestors, ancestors_father, ancestors_mother) %>%
+      distinct()  # Remove any duplicates
+    
+    return(all_ancestors)
+  }
+}
+# Function to get all ancestors for each proband up to k generations, parallelized with furrr
+get_all_ancestors_furrr <- function(pedigree, list_of_probands, k) {
+  # Plan for parallel processing using available cores
+  plan(multisession, workers = future::availableCores() - 1)
+  
+  # Use future_map instead of lapply for parallel execution
+  all_ancestors <- future_map_dfr(list_of_probands, function(proband) {
+    ancestors <- get_ancestors(pedigree, proband, k)
+    ancestors$proband <- proband
+    return(ancestors)
+  })
+  
+  # Remove missing ancestors
+  all_ancestors <- all_ancestors %>% filter(!is.na(ancestor))
+  
+  return(all_ancestors)
+}
+# Function to identify common ancestors and group relatives by ancestor and generation
+identify_common_ancestors <- function(all_ancestors) {
+  # Find common ancestors and keep track of the generation
+  common_ancestors <- all_ancestors %>%
+    group_by(ancestor, generation) %>%
+    filter(n_distinct(proband) > 1) %>%
+    ungroup()
+  
+  return(common_ancestors)
+}
+# Function to group relatives based on shared ancestors
+group_relatives <- function(common_ancestors) {
+  # Define relationships based on the generation of the shared ancestor
+  relatives <- common_ancestors %>%
+    mutate(relationship = case_when(
+      generation == 1 ~ "siblings",
+      generation == 2 ~ "first_cousins",
+      generation == 3 ~ "second_cousins",
+      TRUE ~ paste0(generation - 1, "_degree_relatives")
+    ))
+  
+  # Create all pair combinations of probands for each common ancestor
+  relative_pairs <- relatives %>%
+    select(proband, ancestor, generation, relationship) %>%
+    group_by(ancestor, generation, relationship) %>%
+    summarise(pairs = list(combn(proband, 2, simplify = FALSE)), .groups = "drop") %>%
+    unnest(pairs) %>%
+    mutate(
+      proband1 = map_int(pairs, 1),
+      proband2 = map_int(pairs, 2)
+    ) %>%
+    select(proband1, proband2, ancestor, generation, relationship)
+  
+  return(relative_pairs)
+}
+# Main function to identify and classify relative types among probands
+identify_related_probands <- function(pedigree, list_of_probands, k) {
+  # Step 1: Get all ancestors up to generation k
+  all_ancestors <- get_all_ancestors_furrr(pedigree, list_of_probands, k)
+  
+  # Step 2: Identify common ancestors among probands
+  common_ancestors <- identify_common_ancestors(all_ancestors)
+  
+  # Step 3: Group relatives based on shared ancestors and their generation
+  relatives <- group_relatives(common_ancestors)
+  
+  # Return the result: each row represents a pair of probands, their shared ancestor, and their relationship type
+  return(relatives)
+}
