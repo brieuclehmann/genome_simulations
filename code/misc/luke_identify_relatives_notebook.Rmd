@@ -2,34 +2,32 @@
 library(dplyr)
 library(tidyr)
 library(furrr)
+library(purrr)
 
-# Recursive function to get ancestors up to k generations
-get_ancestors <- function(pedigree, inds, k, current_generation = 0) {
+# Recursive function to get ancestors up to k generations, including sex and lineage
+get_ancestors <- function(pedigree, inds, k, current_generation = 0, lineage = "") {
   if (k < 0 || length(inds) == 0) {
-    # If we reach k < 0 or inds is empty, return an empty data frame
-    return(data.frame(ancestor = integer(0), generation = integer(0)))
+    return(data.frame(ancestor = integer(0), generation = integer(0), sex = integer(0), lineage = character(0)))
   } else {
-    # Current ancestors at this generation
-    current_ancestors <- data.frame(ancestor = inds, generation = current_generation)
+    current_ancestors <- data.frame(ancestor = inds, generation = current_generation, lineage = lineage) %>%
+      left_join(pedigree %>% select(ind, sex), by = c("ancestor" = "ind"))
     
-    # Retrieve parents of the current individuals
     parents <- pedigree %>%
       filter(ind %in% inds) %>%
       select(father, mother)
     
-    # Recursively get ancestors from parents, incrementing generation each time
-    ancestors_father <- get_ancestors(pedigree, na.omit(parents$father), k - 1, current_generation + 1)
-    ancestors_mother <- get_ancestors(pedigree, na.omit(parents$mother), k - 1, current_generation + 1)
+    # For father's side, append 'paternal' to lineage
+    ancestors_father <- get_ancestors(pedigree, na.omit(parents$father), k - 1, current_generation + 1, lineage = paste(lineage, "paternal", sep = "->"))
     
-    # Combine all ancestors, ensuring no duplicate rows
+    # For mother's side, append 'maternal' to lineage
+    ancestors_mother <- get_ancestors(pedigree, na.omit(parents$mother), k - 1, current_generation + 1, lineage = paste(lineage, "maternal", sep = "->"))
+    
     all_ancestors <- bind_rows(current_ancestors, ancestors_father, ancestors_mother) %>%
-      distinct()  # Remove any duplicates
+      distinct()
     
     return(all_ancestors)
   }
 }
-
-
 
 # Function to get all ancestors for each proband up to k generations, parallelized with furrr
 get_all_ancestors_furrr <- function(pedigree, list_of_probands, k) {
@@ -49,12 +47,11 @@ get_all_ancestors_furrr <- function(pedigree, list_of_probands, k) {
   return(all_ancestors)
 }
 
-
 # Function to identify common ancestors and group relatives by ancestor and generation
 identify_common_ancestors <- function(all_ancestors) {
-  # Find common ancestors and keep track of the generation
+  # Find common ancestors and keep track of the generation, sex, and lineage
   common_ancestors <- all_ancestors %>%
-    group_by(ancestor, generation) %>%
+    group_by(ancestor, generation, sex, lineage) %>%
     filter(n_distinct(proband) > 1) %>%
     ungroup()
   
@@ -74,19 +71,18 @@ group_relatives <- function(common_ancestors) {
   
   # Create all pair combinations of probands for each common ancestor
   relative_pairs <- relatives %>%
-    select(proband, ancestor, generation, relationship) %>%
-    group_by(ancestor, generation, relationship) %>%
+    select(proband, ancestor, generation, sex, lineage, relationship) %>%
+    group_by(ancestor, generation, sex, lineage, relationship) %>%
     summarise(pairs = list(combn(proband, 2, simplify = FALSE)), .groups = "drop") %>%
     unnest(pairs) %>%
     mutate(
       proband1 = map_int(pairs, 1),
       proband2 = map_int(pairs, 2)
     ) %>%
-    select(proband1, proband2, ancestor, generation, relationship)
+    select(proband1, proband2, ancestor, generation, sex, lineage, relationship)
   
   return(relative_pairs)
 }
-
 
 # Main function to identify and classify relative types among probands
 identify_related_probands <- function(pedigree, list_of_probands, k) {
@@ -102,6 +98,31 @@ identify_related_probands <- function(pedigree, list_of_probands, k) {
   # Return the result: each row represents a pair of probands, their shared ancestor, and their relationship type
   return(relatives)
 }
+
+# Function to find probands with the most complete set of relatives
+get_probands_with_most_relatives <- function(relatives) {
+  probands_relatives <- relatives %>%
+    select(proband1, proband2, relationship) %>%
+    pivot_longer(cols = c(proband1, proband2), names_to = "proband_role", values_to = "proband") %>%
+    mutate(relative = ifelse(proband_role == "proband1", proband2, proband1)) %>%
+    select(proband, relative, relationship) %>%
+    distinct()
+  
+  probands_relationships <- probands_relatives %>%
+    group_by(proband) %>%
+    summarise(relationships = list(unique(relationship)))
+  
+  probands_relationship_counts <- probands_relationships %>%
+    mutate(num_relationships = map_int(relationships, length))
+  
+  max_num_relationships <- max(probands_relationship_counts$num_relationships)
+  
+  probands_with_most_relatives <- probands_relationship_counts %>%
+    filter(num_relationships == max_num_relationships)
+  
+  return(list(probands_relatives = probands_relatives, probands_with_most_relatives = probands_with_most_relatives))
+}
+
 ```
 
 ```{r}
@@ -111,19 +132,30 @@ destination <- "/Users/luke/Desktop/sample_pedigree.csv"
 download.file(url, destination)
 
 pedigree <- data.table::fread(destination) %>% 
-  filter(mother!=0, father!=0, ind !=0)
+  filter(mother != 0, father != 0, ind != 0)
 
 list_of_probands <- pedigree %>% 
   filter(!ind %in% c(pedigree$mother, pedigree$father)) %>% 
   pull(ind) 
 
-relatives <- identify_related_probands(pedigree, list_of_probands, k=5) 
-relatives <- relatives %>%
-    select(-ancestor) %>%
-    group_by(proband1, proband2) %>%
-    filter(generation == min(generation)) %>%
-    distinct()
+relatives <- identify_related_probands(pedigree, list_of_probands, k = 5) 
 
+# Process relatives to keep only the closest relationship for each pair
+relatives <- relatives %>%
+  group_by(proband1, proband2) %>%
+  filter(generation == min(generation)) %>%
+  ungroup() %>%
+  distinct()
+
+# Arrange by generation
 relatives %>% arrange(generation)
+
+# Find probands with the most complete set of relatives
+probands_relatives_info <- get_probands_with_most_relatives(relatives)
+probands_with_most_relatives <- probands_relatives_info$probands_with_most_relatives
+
+# View the probands with the most complete set of relatives
+probands_with_most_relatives
+
 
 ```
