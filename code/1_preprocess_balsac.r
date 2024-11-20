@@ -23,8 +23,12 @@ write_csv(full_df, "data/balsac_pedigree.csv")
 list_of_probands <- full_df %>% 
   filter(!ind %in% c(full_df$mother, full_df$father)) %>% 
   pull(ind) 
-relatives <- identify_related_probands(full_df, list_of_probands, k=3) 
-write_csv(relatives, "data/balsac_relatives.csv")
+relatives <- identify_related_probands(full_df, list_of_probands, k=5) 
+relatives <- relatives %>%
+    select(-ancestor) %>%
+    group_by(proband1, proband2) %>%
+    filter(generation == min(generation)) %>%
+    distinct()
 
 proband_df <- pedigree_df %>%
     distinct(proband_region, proband)
@@ -34,9 +38,9 @@ relative_df <- relatives %>%
     rename(proband_region1 = proband_region) %>%
     left_join(proband_df, by = c("proband2" = "proband")) %>%
     rename(proband_region2 = proband_region) %>%
-    select(-ancestor) %>%
     distinct()
 
+write_csv(relative_df, "data/balsac_relatives.csv")
 
 ##########################
 ### Select individuals ###
