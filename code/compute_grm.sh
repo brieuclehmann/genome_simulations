@@ -1,11 +1,11 @@
 #!/bin/bash -l
 #$ -cwd
 #$ -pe smp 1
-#$ -l h_rt=4:00:00
+#$ -l h_rt=12:00:00
 #$ -l mem=4G
-#$ -t 1
-#$ -o logs/balsac.out
-#$ -e logs/balsac.err
+#$ -t 2-100
+#$ -o logs/balsac_grm.out
+#$ -e logs/balsac_grm.err
 #$ -M b.lehmann@ucl.ac.uk
 #$ -m beas
 
@@ -25,7 +25,7 @@ python3 code/compute_grm.py \
 -d $dir \
 -o $ts_path \
 -p $pedigree_name \
--chr 21 \
+-chr 3 \
 -rep $SGE_TASK_ID
 #-censor
 

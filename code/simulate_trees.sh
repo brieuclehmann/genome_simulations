@@ -1,9 +1,9 @@
 #!/bin/bash -l
 #$ -cwd
 #$ -pe smp 1
-#$ -l h_rt=0:30:00
+#$ -l h_rt=1:30:00
 #$ -l mem=2G
-#$ -t 2-100
+#$ -t 4
 #$ -o logs/balsac.out
 #$ -e logs/balsac.err
 #$ -M b.lehmann@ucl.ac.uk
