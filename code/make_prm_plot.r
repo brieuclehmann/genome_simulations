@@ -52,11 +52,6 @@ relatedness_long <- relatedness_matrix %>%
   ) %>% 
   mutate(Value = ifelse(Row == Column, NA, Value))
 
-
-
-# Create output file name (.jpg)
-output_file <- paste0(filename_no_ext, ".jpg")
-
 # Create plot title by replacing underscores with spaces
 plot_title <- gsub("_", " ", filename_no_ext)
 plot_title <- paste("Heatmap of Relatedness Matrix\n", plot_title)
@@ -80,3 +75,6 @@ p <- ggplot(relatedness_long, aes(x = Column, y = Row, fill = -log(Value + 1e-04
 
 # Save the plot to a JPEG file
 ggsave(output_file, plot = p, width = 8, height = 6, dpi = 300)
+
+# Print the output file location
+cat("Heatmap saved to:", output_file, "\n")
