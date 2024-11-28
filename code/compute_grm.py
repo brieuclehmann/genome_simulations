@@ -47,7 +47,7 @@ def main(args):
         grm_df = pd.DataFrame(grm, columns = col_names)
         grm_df.to_csv(grm_dir_out + "/" + mode + ".csv", index=False)
         
-        grm_recap = grm_tools.compute_grm(ts_recap, grm_ind)
+        grm_recap = grm_tools.compute_grm(ts_recap, grm_ind, mode = mode)
         grm_recap_df = pd.DataFrame(grm_recap, columns = col_names)
         grm_recap_df.to_csv(grm_dir_out + "/" + mode + "_recap.csv", index=False)
 
