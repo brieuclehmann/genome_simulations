@@ -5,6 +5,20 @@
     \____/\___|_| |_|\___/|_| |_| |_|\___| \__|_|_| |_| |_|\__,_|_|\__,_|\__\___/|_|   
                                                                                    
                                                                                                                                                                                                                   
+
+# tsrelatedness simulations
+
+The key python scripts are:
+- `code/simulate_trees.py`
+- `code/compute_grm.py`
+
+These have corresponding (.sh) bash scripts to call them from a cluster. `code/simulate_trees.py` takes as input a text pedigree then simulates (and saves) two tree sequences: a non-recapitated one and a recapitated one. This can be repeated using different random seeds (via the --rep argument) to generate multiple tree sequences from the same pedigree.
+
+Given the tree sequences, `code/compute_grm.py` computes branch-based and site-based relatedness using `tskit.genetic_relatedness_matrix`. These scripts should be run from the `genome_simulations` directory (i.e. not `genome_simulations/code`) so that the utility functions are imported from the right place. 
+
+Plotting scripts `plot_*.py` are work-in-progress.
+
+
 # Pedigree aware genome simulations
 
 This repository contains scripts that run msprime genome simulations based on a input text pedigree. `tskit` and `msprime` provide extensive [documentation](https://tskit.dev/msprime/docs/latest/api.html#msprime.sim_ancestry) about these simulations. New to this? A good starting point is the msprime [introduction](https://tskit.dev/msprime/docs/stable/intro.html). 
