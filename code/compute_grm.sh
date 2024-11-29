@@ -2,8 +2,8 @@
 #$ -cwd
 #$ -pe smp 1
 #$ -l h_rt=12:00:00
-#$ -l mem=4G
-#$ -t 2-100
+#$ -l mem=8G
+#$ -t 1
 #$ -o logs/balsac_grm.out
 #$ -e logs/balsac_grm.err
 #$ -M b.lehmann@ucl.ac.uk

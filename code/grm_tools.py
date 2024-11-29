@@ -1,6 +1,8 @@
 import time
+import itertools
+import numpy as np
 
-def compute_grm(ts, grm_ind, mode = "branch"):
+def compute_grm(ts, grm_ind, mode = "branch", centre=True):
 
     # Simplify tree sequence to individuals in grm_ind
     sample_nodes = []
@@ -15,7 +17,11 @@ def compute_grm(ts, grm_ind, mode = "branch"):
     sample_sets = [i.nodes for i in grm_sub_ind]
 
     start = time.time()
-    grm = ts_sub.genetic_relatedness_matrix(sample_sets, mode = mode)
+    if centre:
+        grm = ts_sub.genetic_relatedness_matrix(sample_sets, mode = mode)
+    else:
+        grm = grm_summary_stat(ts, sample_sets, mode)
+
     end = time.time()
     print(end - start)
 
@@ -28,3 +34,12 @@ def simplify_ts(ts, grm_ind):
         grm_sample_sets.append([i.nodes[1]])
     ts_sub = ts.simplify([i[0] for i in grm_sample_sets], filter_individuals=False)
     return ts_sub
+
+
+def grm_summary_stat(ts, sample_sets, mode="branch"):
+    n = len(sample_sets)
+    indexes = [(n1, n2) for n1, n2 in itertools.combinations_with_replacement(range(n), 2)]
+    K = np.zeros((n,n))
+    K[np.triu_indices(n)] = ts.genetic_relatedness(sample_sets, indexes, mode = mode, proportion=False, centre=False)
+    K = K + np.triu(K,1).transpose()
+    return K

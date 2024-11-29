@@ -6,3 +6,8 @@ code/tout_balsac.csv
 *.bed
 *.tsz
 *.ts
+*.DS_Store
+*.ipynb_checkpoints
+*.RData
+*.Rhistory
+*/__pycache__/

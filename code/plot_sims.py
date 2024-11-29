@@ -1,10 +1,5 @@
-import os
-import argparse
-import sys
 import pandas as pd
 import numpy as np
-import tskit
-from scipy.linalg import eigh
 import matplotlib.pyplot as plt
 import seaborn as sns
 
@@ -24,21 +19,7 @@ order_cols = [str(i) for i in order_cols]
 
 # Get relative information
 relative_df = pd.read_csv("data/balsac_relatives.csv")
-relative_df.loc[relative_df['proband1'].isin(selected_df['ind']) & relative_df['proband2'].isin(selected_df['ind'])]
-
-relative_df = (
-    relative_df
-    .merge(selected_df[['ind' , 'proband_region']], left_on="proband1", right_on="ind", how = "inner")
-    .rename(columns={"proband_region": "proband_region1"})
-    .drop(columns=['ind'])
-)
-relative_df = (
-    relative_df
-    .merge(selected_df[['ind' , 'proband_region']], left_on="proband2", right_on="ind", how = "inner")
-    .rename(columns={"proband_region": "proband_region2"})
-    .drop(columns=['ind'])
-)
-relative_df = relative_df.drop(columns=["ancestor"]).drop_duplicates()
+relative_df = relative_df.loc[relative_df['proband1'].isin(selected_df['ind']) & relative_df['proband2'].isin(selected_df['ind'])]
 
 plot_pairs = (
     relative_df.loc[relative_df['proband_region1'] == relative_df['proband_region2']]
@@ -67,6 +48,8 @@ for type in ["branch", "branch_recap", "site", "site_recap"]:
     full_df = pd.concat([full_df, melt_df])
 
 
+
+
 plt.clf()
 fig, ax1 = plt.subplots(figsize = (8,4))
 sns.boxplot(x="prm", y = "grm", hue= "type", data = full_df.loc[full_df['type'].isin(["branch", "site"])])
@@ -76,7 +59,27 @@ fig.savefig("plots/boxplot_decap.pdf")
 
 plt.clf()
 fig, ax1 = plt.subplots(figsize = (8,4))
-sns.boxplot(x="prm", y = "grm", hue= "proband_region1", data = full_df.loc[full_df['type'].isin(["branch"])])
+sns.boxplot(x="prm", y = "grm", hue= "proband_region1", data = full_df.loc[full_df['type'].isin(["branch_recap"])])
 ax1.set_xticklabels(['{:.2f}'.format(float(t.get_text())) for t in ax1.get_xticklabels()])
 plt.xticks(rotation=45)
+fig.savefig("plots/boxplot_branch_region.pdf")
+
+plt.clf()
+fig, ax1 = plt.subplots(figsize = (8,4))
+g = sns.FacetGrid(full_df.loc[full_df['type'].isin(["branch_recap"])], col = "generation")
+g.map(sns.boxplot, x="prm", y="grm", hue= "proband_region1", data = full_df.loc[full_df['type'].isin(["branch_recap"])])
+ax1.set_xticklabels(['{:.2f}'.format(float(t.get_text())) for t in ax1.get_xticklabels()])
+plt.xticks(rotation=45)
+fig.savefig("plots/boxplot_branch_region_split.pdf")
+
+plt.clf()
+fig, ax1 = plt.subplots(figsize = (8,4))
+sns.catplot(
+    x="prm", y = "grm", 
+    kind = "box", col = "generation", 
+    hue= "proband_region1", 
+    data = full_df.loc[full_df['type'].isin(["branch_recap"])]
+    )
+#ax1.set_xticklabels(['{:.2f}'.format(float(t.get_text())) for t in ax1.get_xticklabels()])
+#plt.xticks(rotation=45)
 fig.savefig("plots/boxplot_branch_region.pdf")

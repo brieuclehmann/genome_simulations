@@ -41,15 +41,15 @@ def main(args):
     # Extract metadata and sample nodes
     grm_ind = [i for i in ts.individuals() if int(i.metadata['individual_name']) in list(selected_df['ind'])]
     col_names = [str(i.metadata['individual_name']) for i in grm_ind]
-
+    centre = False
     for mode in ["site", "branch"]:
-        grm = grm_tools.compute_grm(ts, grm_ind, mode = mode)
+        grm = grm_tools.compute_grm(ts, grm_ind, mode = mode, centre = centre)
         grm_df = pd.DataFrame(grm, columns = col_names)
-        grm_df.to_csv(grm_dir_out + "/" + mode + ".csv", index=False)
+        grm_df.to_csv(grm_dir_out + "/" + mode + "_noncentred.csv", index=False)
         
-        grm_recap = grm_tools.compute_grm(ts_recap, grm_ind, mode = mode)
+        grm_recap = grm_tools.compute_grm(ts_recap, grm_ind, mode = mode, centre = centre)
         grm_recap_df = pd.DataFrame(grm_recap, columns = col_names)
-        grm_recap_df.to_csv(grm_dir_out + "/" + mode + "_recap.csv", index=False)
+        grm_recap_df.to_csv(grm_dir_out + "/" + mode + "_recap_noncentred.csv", index=False)
 
     print("Finished.")
 
