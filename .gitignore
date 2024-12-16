@@ -11,3 +11,6 @@ code/tout_balsac.csv
 *.RData
 *.Rhistory
 */__pycache__/
+code/.DS_Store
+code/Rplots.pdf
+code/.DS_Store
