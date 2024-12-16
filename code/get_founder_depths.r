@@ -4,6 +4,8 @@
 library(dplyr)
 library(tidyr)
 library(data.table)
+library(ggplot2)
+library(cowplot)
 
 # Usage:
 # Rscript find_founder_depths.R input_pedigree.csv [output_file.csv]
@@ -24,6 +26,11 @@ output_file <- if (length(args) == 2) args[2] else NULL
 if (!file.exists(input_file)) {
   stop("Input file does not exist: ", input_file)
 }
+
+# Extract the base name for plot saving
+filename <- basename(input_file)
+filename_no_ext <- tools::file_path_sans_ext(filename)
+plot_file <- paste0(filename_no_ext, "_founder_depths.jpg")
 
 # Read and preprocess the pedigree data
 # We assume a standard structure with columns: ind, father, mother
@@ -114,3 +121,22 @@ if (!is.null(output_file)) {
   # Print full results to stdout
   print(results)
 }
+
+# Generate Plots
+# Unnest founder_depths into long format
+depths_long <- results %>%
+  select(proband, founder_depths) %>%
+  unnest_longer(founder_depths) %>%
+  rename(depth = founder_depths)
+
+# 1) Overlapping density plots for each proband
+density_plot <- ggplot(depths_long, aes(x = depth, group = proband)) +
+  geom_density(alpha = 0.1, linewidth=0.1) +
+  theme_minimal() +
+  labs(title = "Founder Depth Distributions by Proband",
+       x = "Depth",
+       y = "Density")
+
+
+# Save the combined plot
+ggsave(plot_file, plot = density_plot, width = 5, height = 3, dpi = 300)
