@@ -47,7 +47,13 @@ for type in ["branch", "branch_recap", "site", "site_recap"]:
     melt_df['type'] = type
     full_df = pd.concat([full_df, melt_df])
 
-
+share = True
+if share:
+    all_probands = list(set(list(full_df.proband1)) | set(list(full_df.proband2)))
+    scramble_map = {j:i for i,j in enumerate(all_probands)}
+    full_df['proband1'] = [scramble_map[i] for i in full_df['proband1']]
+    full_df['proband2'] = [scramble_map[i] for i in full_df['proband2']]
+    full_df.to_csv("output/relatives_relatedness.csv")
 
 
 plt.clf()
