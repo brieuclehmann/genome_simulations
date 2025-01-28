@@ -10,6 +10,8 @@ library(cowplot)
 library(viridis)
 library(ggdendro) # for converting hclust to ggplot-compatible data
 
+set.seed(345)
+
 # Get command line arguments
 args <- commandArgs(trailingOnly = TRUE)
 
@@ -35,6 +37,12 @@ plot2_file <- file.path(output_dir, paste0(filename_no_ext, "_heatmap_with_bar_d
 relatedness_matrix <- read_csv(data_file, col_names = TRUE)
 metadata <- read_csv(meta_file, col_names = TRUE)
 region_order <-  c( "Batiscan","L'Assomption", "Chaleur Bay", "Chaudière", "Mistassini")
+
+# dummy depth column
+proband_depth <- metadata %>%
+  distinct(proband1, proband_region1) %>%
+  rename(proband = proband1, proband_region = proband_region1) %>%
+  mutate(depth = runif(n()))  # random values between 0 and 1
 
 # Process metadata to extract proband regions
 proband_region1 <- metadata %>%
@@ -84,7 +92,10 @@ relatedness_long <- relatedness_matrix %>%
   mutate(
     proband_region1 = factor(proband_region1, levels = region_order),
     proband_region2 = factor(proband_region2, levels = region_order)
-  )
+  ) %>%
+  left_join(proband_depth, by = c("proband1" = "proband"))
+
+
 
 # Apply clustering order to factor levels
 relatedness_long$proband1 <- factor(relatedness_long$proband1, levels = proband_ranking)
@@ -112,16 +123,21 @@ boxplot <- ggplot(relatives, aes(x = relationship, y = Relatedness)) +
 # Save the boxplot
 ggsave(plot1_file, plot = boxplot, width = 8, height = 6, dpi = 300)
 
+proband_regions <- relatedness_long %>% distinct(proband1, depth, proband_region1)
+
 # Create a dummy bar plot to indicate proband region
 region_colors <- ggplot(relatedness_long,
-                        aes(x = proband1, y = 1, fill = as.factor(proband_region1))) +
-    geom_tile() +
-    scale_fill_viridis_d(option = "turbo", name = "Region", na.value="blue") +
-    theme_void() +
-    theme(legend.position = "bottom",
-          axis.text.x = element_blank(),
-          axis.ticks.x = element_blank()) +
-    guides(fill = guide_legend(nrow = 1))
+                        aes(x = proband1, y = depth, fill = as.factor(proband_region1))) +
+  geom_col(color = NA) +
+  scale_fill_viridis_d(option = "turbo", name = "Region", na.value = "blue") +
+  scale_y_reverse() +
+  theme_void() +
+  theme(
+    legend.position = "bottom",
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank()
+  ) +
+  guides(fill = guide_legend(nrow = 1))
 
 # Generate heatmap of relatedness
 heatmap <- ggplot(relatedness_long, aes(x = proband1, y = proband2, fill = Relatedness + 1e-04)) +
@@ -174,7 +190,7 @@ dendrogram_plot <- ggplot(segment(dendro_data)) +
 combined_plot <- plot_grid(
   dendrogram_plot + theme(plot.margin = margin(0,0,0,5)),
   heatmap + theme(plot.margin = margin(0, 0, 0, 5)),
-  region_colors + theme(plot.margin = margin(0, 0, 5, 5)),
+  region_colors + theme(plot.margin = margin(0, 0, 0, 5)),
   ncol = 1, 
   rel_heights = c(0.1, 1, 0.1),
   align = "v", 
