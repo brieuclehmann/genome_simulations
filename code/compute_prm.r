@@ -21,6 +21,8 @@ ped <- ped %>%
          mid = id_map[as.character(mother)]) %>%
   mutate(sample = if_else(ind %in% sub_df$ind, TRUE, FALSE))
 
+id_map <- as.character(ped$proband)
+names(id_map) <- ped$id
 # ---- Calculate pedigree-base relatedness (PRM) -------------------------------
 
 # You can skip this section and rather import exported data at the end of this section
@@ -47,5 +49,9 @@ PRM_samples <- getASubset(ped = ped2, labs = samplesChar)
 str(PRM_samples)
 PRM_samples[samplesChar[1:5], samplesChar[1:5]]
 
+# Change back to BALSAC IDs
 PRM_samples <- as.matrix(PRM_samples)
+new_names = id_map[colnames(PRM_samples)]
+colnames(PRM_samples) <- new_names
+
 write_csv(as_tibble(PRM_samples), "output/chr3_prm.csv")

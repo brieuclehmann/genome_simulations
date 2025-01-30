@@ -110,16 +110,17 @@ results <- lapply(list_of_probands, function(p) {
   }
 }) %>% bind_rows()
 
+results_save = results[c('proband', 'average_depth')]
 # Print only the header if output file is specified, otherwise print the full results
 if (!is.null(output_file)) {
   # Write results to file
-  write.csv(results, output_file, row.names = FALSE)
+  write.csv(results_save, output_file, row.names = FALSE)
   
   # Print only the header (column names) to stdout
-  cat(paste(names(results), collapse = ","), "\n")
+  cat(paste(names(results_save), collapse = ","), "\n")
 } else {
   # Print full results to stdout
-  print(results)
+  print(results_save)
 }
 
 # Generate Plots
@@ -129,7 +130,7 @@ depths_long <- results %>%
   unnest_longer(founder_depths) %>%
   rename(depth = founder_depths)
 
-# 1) Overlapping density plots for each proband
+# # 1) Overlapping density plots for each proband
 density_plot <- ggplot(depths_long, aes(x = depth, group = proband)) +
   geom_density(alpha = 0.1, linewidth=0.1) +
   theme_minimal() +
@@ -138,5 +139,5 @@ density_plot <- ggplot(depths_long, aes(x = depth, group = proband)) +
        y = "Density")
 
 
-# Save the combined plot
+# # Save the combined plot
 ggsave(plot_file, plot = density_plot, width = 5, height = 3, dpi = 300)

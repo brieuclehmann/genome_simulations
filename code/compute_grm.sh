@@ -3,14 +3,14 @@
 #$ -pe smp 1
 #$ -l h_rt=12:00:00
 #$ -l mem=8G
-#$ -t 1
+#$ -t 2-100
 #$ -o logs/balsac_grm.out
 #$ -e logs/balsac_grm.err
 #$ -M b.lehmann@ucl.ac.uk
 #$ -m beas
 
 # load software and environments
-module load python/3.9
+module load python3/3.9
 source tsrelatedness/bin/activate
 #pip install --no-index --upgrade pip
 #pip install --no-index -r $HOME/projects/ctb-sgravel/python_environments/pedsim_requirements.txt

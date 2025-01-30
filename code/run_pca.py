@@ -65,6 +65,7 @@ def main(args):
     selected_df = proband_df.groupby('proband_region').sample(n_select, random_state=42)
     selected_df = proband_df
     grm_ind = [i for i in ts.individuals() if int(i.metadata['individual_name']) in list(selected_df['ind'])]
+    grm_ind = [i for i in ts.individuals() if int(i.metadata['individual_name']) in list(proband_df['ind'])]
     col_names = [str(i.metadata['individual_name']) for i in grm_ind]
 
     # Compute GRM plus rescaled GRM
@@ -90,16 +91,23 @@ def main(args):
 
 
     # Extract metadata and sample nodes
-    selected_ind = [i for i in new_ts.individuals() if int(i.metadata['individual_name']) in list(selected_df['ind'])]
+    selected_ind = [i for i in new_ts.individuals() if int(i.metadata['individual_name']) in list(proband_df['ind'])]
     pca_ind = [i.id for i in selected_ind]
     balsac_ind = [int(i.metadata['individual_name']) for i in selected_ind]
+
+    founder_df = pd.read_csv("data/balsac_founder_depths.csv")
+    founder_df = founder_df.rename(columns={"proband":"ind"})
 
     label_df = pd.DataFrame({"ind":balsac_ind})
     # label_df = pd.DataFrame({"ind":grm.columns.values})
     label_df = label_df.astype({"ind":np.int32})
     label_df = label_df.merge(region_df, on = 'ind', how = 'left')
+    #label_df = label_df.merge(founder_df, on = 'ind', how = 'left')
+    #label_df['shallow'] = label_df['average_depth'] <= 5
     labels = label_df['proband_region']
+    #labels = label_df['shallow']
     labels_int, labels_unique = pd.factorize(labels)
+
 
     col_names = [str(i.metadata['individual_name']) for i in grm_ind]
 
@@ -123,9 +131,8 @@ def main(args):
     
 
     def plot_pca(prin_comp, labels_int, labels_unique, file_path):
-        """
+        """ 
         Plots the first 4 pairs of PC plots (PC1 vs PC2, PC3 vs PC4, etc.).
-
         Parameters:
             prin_comp (ndarray): Principal components array of shape (n_samples, n_components).
             labels_int (ndarray): Integer labels for data points.
@@ -135,20 +142,16 @@ def main(args):
         colors = plt.cm.Set2(np.arange(len(labels_unique)))  # Define a colormap for the labels
         fig, axes = plt.subplots(2, 2, figsize=(10, 10))    # Create 2x2 subplots
         axes = axes.flatten()  # Flatten the axes array for easier indexing
-
         pc_pairs = [(0, 1), (2, 3), (4, 5), (6, 7)]  # Define the first 4 PC pairs
-
         for idx, (pc_x, pc_y) in enumerate(pc_pairs):
             ax = axes[idx]
             for i, label in enumerate(labels_unique):
                 mask = labels_int == i  # Filter points by label
                 ax.scatter(prin_comp[mask, pc_x], prin_comp[mask, pc_y], s=5, label=label, color=colors[i])
-            
             ax.set_title(f'PC{pc_x + 1} vs PC{pc_y + 1}')
             ax.set_xlabel(f'PC{pc_x + 1}')
             ax.set_ylabel(f'PC{pc_y + 1}')
             ax.legend(frameon=False, fontsize=8)
-
         plt.tight_layout()
         plt.savefig(file_path)  # Save the figure
 
@@ -170,10 +173,10 @@ def main(args):
     # plot_pca(prin_comp, file_path)
 
     # ts PCA
-    out = ts.pca(individuals=np.asarray(pca_ind), iterated_power=5, random_seed=1, num_components=10)
-    prin_comp = out.factors
-    file_path = "plots/test_pca_ts.png"
-    plot_pca(prin_comp, labels_int, labels_unique, file_path)
+    # out = ts.pca(individuals=np.asarray(pca_ind), iterated_power=5, random_seed=1, num_components=10)
+    # prin_comp = out.factors
+    # file_path = "plots/test_pca_ts.png"
+    # plot_pca(prin_comp, labels_int, labels_unique, file_path)
 
     # ts rescaled PCA
     start_time = time.time()
@@ -181,7 +184,10 @@ def main(args):
     end_time = time.time()
     print(end_time - start_time)
     prin_comp = out.factors
-    file_path = "plots/test_pca_ts_rescaled.png"
+    prin_comp_df = pd.DataFrame(prin_comp)
+    prin_comp_df['region'] = [labels_unique[i] for i in labels_int]
+    prin_comp_df.to_csv("output/balsac_branch_pca.csv", index=False)
+    file_path = "plots/test_pca_ts_rescaled_founders_new.png"
     plot_pca(prin_comp, labels_int, labels_unique, file_path)
 
 
