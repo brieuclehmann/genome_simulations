@@ -19,12 +19,14 @@ args <- commandArgs(trailingOnly = TRUE)
 if (length(args) < 4) {
   stop("Usage: script.R branch_grm.csv prm_grm.csv site_grm.csv metadata.csv")
 }
-branch_file <- args[1]  # Branch GRM (e.g., grm_branch_recap_noid.csv)
-prm_file    <- args[2]  # Pedigree GRM (e.g., chr3_prm_noid.csv)
-site_file   <- args[3]  # Site GRM (e.g., grm_site_recap_noid.csv)
-meta_file   <- args[4]  # Metadata CSV (e.g., balsac_proband_meta_noid.csv)
+branch_file <- args[1]  # Branch GRM
+prm_file    <- args[2]  # Pedigree GRM
+site_file   <- args[3]  # Site GRM
+meta_file   <- args[4]  # Metadata CSV
 
+# ----------------------------------------------------------------------------
 # Output files
+# ----------------------------------------------------------------------------
 output_dir    <- dirname(branch_file)
 overlay1_file <- file.path(output_dir, "grm_prm_heatmaps.jpg")
 overlay2_file <- file.path(output_dir, "site_branch_grm_heatmaps.jpg")
@@ -35,9 +37,7 @@ overlay2_file <- file.path(output_dir, "site_branch_grm_heatmaps.jpg")
 read_symmetric_matrix <- function(path) {
   df <- read_csv(path, col_names = TRUE)
   mat <- as.matrix(df)
-  if (nrow(mat) != ncol(mat)) {
-    stop("Matrix not square: ", path)
-  }
+  if (nrow(mat) != ncol(mat)) stop("Matrix not square: ", path)
   rownames(mat) <- colnames(mat)
   mat
 }
@@ -54,14 +54,11 @@ process_relatedness <- function(mat_file, metadata_df) {
   ids <- rownames(mat)
   meta <- filter(meta, proband %in% ids)
 
-  # Hierarchical clustering
+  # Hierarchical clustering + region-based ordering
   dist_mat <- as.dist(1 - mat)
   hc <- hclust(dist_mat, method = "average")
   clustered <- rownames(mat)[hc$order]
-
-  # Region-based ordering
-  region_map <- meta %>%
-    select(proband, proband_region) %>% distinct() %>%
+  region_map <- meta %>% select(proband, proband_region) %>% distinct() %>%
     mutate(proband_region = factor(proband_region,
       levels = c("L'Assomption","Batiscan","Chaudière","Mistassini","Chaleur Bay")))
   region_priority <- region_map %>%
@@ -89,7 +86,7 @@ apply_ranking <- function(df_long, ranking) {
 }
 
 # ----------------------------------------------------------------------------
-# Generate region-depth bar under heatmaps
+# Generate region-depth bar under heatmaps, with fixed y-axis ticks (1,5,10)
 # ----------------------------------------------------------------------------
 generate_region_bar <- function(ranking, metadata_df) {
   meta <- metadata_df %>%
@@ -103,17 +100,19 @@ generate_region_bar <- function(ranking, metadata_df) {
     "Mistassini"   = "#FF7F00",
     "Chaleur Bay"  = "#E41A1C"
   )
-  meta %>%
-    filter(proband %in% ranking) %>%
-    mutate(proband = factor(proband, levels = ranking)) %>%
-    ggplot(aes(x = proband, y = depth, fill = proband_region)) +
+  d <- meta %>% filter(proband %in% ranking) %>%
+    mutate(proband = factor(proband, levels = ranking))
+  ggplot(d, aes(x = proband, y = depth, fill = proband_region)) +
     geom_col(color = NA) +
+    scale_x_discrete(limits = ranking) +
+    scale_y_continuous(name = "Depth", breaks = c(1, 5, 10), expand = c(0, 0)) +
     scale_fill_manual(values = region_colors, limits = names(region_colors)) +
-    theme_void() +
     theme(
-      legend.position = "bottom",
-      axis.text.x = element_blank(),
-      axis.ticks.x = element_blank()
+      axis.title.x = element_blank(),
+      axis.text.x  = element_blank(),
+      axis.ticks.x = element_blank(),
+      panel.grid = element_blank(),
+      legend.position = "bottom"
     ) +
     guides(fill = guide_legend(nrow = 1))
 }
@@ -121,23 +120,23 @@ generate_region_bar <- function(ranking, metadata_df) {
 # ----------------------------------------------------------------------------
 # Main execution
 # ----------------------------------------------------------------------------
-# Read metadata
-meta_df <- read_csv(meta_file, col_names = TRUE)
-
-# Get ranking from pedigree GRM (prm_file)
+meta_df <- read_csv(meta_file, show_col_types = FALSE)
+# Ranking from Pedigree GRM
 res_prm <- process_relatedness(prm_file, meta_df)
 ranking <- res_prm$ranking
-
-# Process branch and site GRMs
+# Process branch and site
 res_branch <- process_relatedness(branch_file, meta_df)
 res_site   <- process_relatedness(site_file,   meta_df)
-
-df_branch <- apply_ranking(res_branch$data, ranking) %>% mutate(i = as.integer(p1), j = as.integer(p2))
-df_prm    <- apply_ranking(res_prm$data,    ranking) %>% mutate(i = as.integer(p1), j = as.integer(p2))
-df_site   <- apply_ranking(res_site$data,   ranking) %>% mutate(i = as.integer(p1), j = as.integer(p2))
-
-# Define common theme
-common_theme <- list(
+# Prepare data
+branch_df <- apply_ranking(res_branch$data, ranking) %>% mutate(i = as.integer(p1), j = as.integer(p2))
+prm_df    <- apply_ranking(res_prm$data,    ranking) %>% mutate(i = as.integer(p1), j = as.integer(p2))
+site_df   <- apply_ranking(res_site$data,   ranking) %>% mutate(i = as.integer(p1), j = as.integer(p2))
+# Triangles
+upper_branch <- filter(branch_df, i > j)
+lower_prm    <- filter(prm_df,    i < j)
+lower_site   <- filter(site_df,   i < j)
+# Common theme
+theme_list <- list(
   scale_x_discrete(limits = ranking),
   scale_y_discrete(limits = rev(ranking)),
   theme_void(),
@@ -147,74 +146,77 @@ common_theme <- list(
   )
 )
 
-# Prepare triangles
-upper_branch <- filter(df_branch, i > j)
-lower_prm    <- filter(df_prm,    i < j)
-lower_site   <- filter(df_site,   i < j)
-
-# Plot 1: Branch (upper) + PRM (lower)
+# Plot 1: Branch + Pedigree
+branch_breaks <- c(-5000, -500, 0, 500, 5000)
 p_branch <- ggplot(upper_branch, aes(p1, p2, fill = Relatedness)) +
   geom_tile() +
   scale_fill_gradient2(
     name = "Branch GRM",
     low = "#2C7BB6", mid = "white", high = "#D7191C", midpoint = 0,
-    trans = pseudo_log_trans(sigma = 10), limits = c(-5000,5000), oob = squish,
-    na.value = "black"
-  ) + common_theme + theme(plot.title = element_blank())
+    trans = pseudo_log_trans(sigma = 10), limits = c(-5000, 5000),
+    breaks = branch_breaks, oob = squish, na.value = "black"
+  ) + theme_list + theme(plot.title = element_blank())
 
 p_prm <- ggplot(lower_prm, aes(p1, p2, fill = Relatedness + 1e-4)) +
   geom_tile() +
   scale_fill_gradient(
     name = "Pedigree GRM",
     low = "white", high = "black", trans = "log",
-    breaks = 2^seq(-12,0,2), labels = 2^seq(-12,0,2), na.value = "black"
-  ) + common_theme + guides(fill = guide_colorbar()) + theme(plot.title = element_blank())
+    breaks = 2^seq(-12, 0, by = 2),
+    labels = format(2^seq(-12, 0, by = 2), digits = 3, scientific = FALSE),
+    na.value = "black"
+  ) + theme_list + guides(fill = guide_colorbar()) + theme(plot.title = element_blank())
 
 region_bar <- generate_region_bar(ranking, meta_df)
-
 leg1 <- plot_grid(
   get_legend(p_branch + theme(legend.position = "right")),
   get_legend(p_prm   + theme(legend.position = "right")),
   ncol = 1
 )
-
-overlay1 <- ggdraw() +
-  draw_plot(p_prm + theme(legend.position = "none"), 0,0,1,1) +
-  draw_plot(p_branch + theme(legend.position = "none"), 0,0,1,1)
 panel1 <- plot_grid(
-  overlay1,
+  ggdraw() +
+    draw_plot(p_prm + theme(legend.position = "none"), 0, 0, 1, 1) +
+    draw_plot(p_branch + theme(legend.position = "none"), 0, 0, 1, 1),
   region_bar,
-  ncol = 1, rel_heights = c(1, 0.1)
+  ncol = 1,
+  rel_heights = c(1, 0.15),
+  align = "v",
+  axis = "lr"
 )
-final1 <- plot_grid(panel1, leg1, ncol = 2, rel_widths = c(1,0.2))
+final1 <- plot_grid(panel1, leg1, ncol = 2, rel_widths = c(1, 0.2))
 
 ggsave(overlay1_file, final1, width = 10, height = 10, dpi = 300)
 cat("Saved Branch vs Pedigree overlay to:", overlay1_file, "\n")
 
-# Plot 2: Branch (upper) + Site (lower)
-p_site <- ggplot(lower_site, aes(p1, p2, fill = Relatedness + 1e-4)) +
+# Plot 2: Branch + Site
+p_site <- ggplot(lower_site, aes(p1, p2, fill = Relatedness)) +
   geom_tile() +
-  scale_fill_gradient(
+  scale_fill_gradient2(
     name = "Site GRM",
-    low = "#1ABC9C", high = "#E67E22", trans = "log",
-    breaks = 2^seq(-12,0,2), labels = 2^seq(-12,0,2), na.value = "black"
-  ) + common_theme + guides(fill = guide_colorbar()) + theme(plot.title = element_blank())
+    low = "#1ABC9C", mid = "white", high = "#E67E22", midpoint = 0,
+    trans = pseudo_log_trans(sigma = 10), limits = c(-5000, 5000),
+    breaks = c(-5000, -500, 0, 500, 5000), oob = squish, na.value = "black"
+  ) + theme_list + guides(fill = guide_colorbar()) + theme(plot.title = element_blank())
 
 leg2 <- plot_grid(
   get_legend(p_branch + theme(legend.position = "right")),
   get_legend(p_site   + theme(legend.position = "right")),
   ncol = 1
 )
-
-overlay2 <- ggdraw() +
-  draw_plot(p_site   + theme(legend.position = "none"), 0,0,1,1) +
-  draw_plot(p_branch + theme(legend.position = "none"), 0,0,1,1)
 panel2 <- plot_grid(
-  overlay2,
+  ggdraw() +
+    draw_plot(p_site   + theme(legend.position = "none"), 0, 0, 1, 1) +
+    draw_plot(p_branch + theme(legend.position = "none"), 0, 0, 1, 1),
   region_bar,
-  ncol = 1, rel_heights = c(1, 0.1)
+  ncol = 1,
+  rel_heights = c(1, 0.15),
+  align = "v",
+  axis = "lr"
 )
-final2 <- plot_grid(panel2, leg2, ncol = 2, rel_widths = c(1,0.2))
+final2 <- plot_grid(panel2, leg2, ncol = 2, rel_widths = c(1, 0.2))
 
 ggsave(overlay2_file, final2, width = 10, height = 10, dpi = 300)
 cat("Saved Branch vs Site overlay to:", overlay2_file, "\n")
+
+
+# Rscript code/make_branch_vs_site_grm_plot.r  /Users/luke/Documents/genome_simulations_tsrelatedness/misc/geo_map/grm_branch_recap_noid.csv   /Users/luke/Documents/genome_simulations_tsrelatedness/misc/geo_map/chr3_prm_noid.csv   /Users/luke/Documents/genome_simulations_tsrelatedness/misc/geo_map/grm_site_recap_noid.csv   /Users/luke/Documents/genome_simulations_tsrelatedness/misc/geo_map/balsac_proband_meta_noid.csv
